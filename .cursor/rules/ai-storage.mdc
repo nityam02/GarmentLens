@@ -1,0 +1,93 @@
+---
+description: Rules for AI classifier and MinIO storage services
+globs: backend/src/services/**/*.js
+---
+
+# AI & Storage Service Rules
+
+## AI Classifier — GPT-4o Vision
+
+### Model and parameters
+- Model: `gpt-4o` (do NOT downgrade to `gpt-4o-mini` without testing accuracy impact)
+- Image detail: `"high"` — GPT-4o tiles the image into 512px crops for fine-grained analysis
+  - Required for fabric texture, small tears, seam damage detection
+  - Costs more tokens but significantly improves classification accuracy
+- `response_format: { type: 'json_object' }` — enforces valid JSON output from the model
+  - Eliminates need for regex JSON extraction (which is fragile)
+  - Always parse with `JSON.parse(response.choices[0].message.content)` directly
+
+### Prompt structure (OpenAI best practice)
+- System prompt first: sets expert context ("expert garment repair classifier with 20+ years experience")
+- Image in user message content array BEFORE the text prompt
+- Text prompt after image: describes schema, enums, complexity rubric
+- This ordering (system → image → instructions) improves extraction accuracy
+
+```javascript
+// Correct message structure
+messages: [
+  { role: 'system', content: SYSTEM_PROMPT },
+  {
+    role: 'user',
+    content: [
+      { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}`, detail: 'high' } },
+      { type: 'text', text: buildUserPrompt() },
+    ],
+  },
+]
+```
+
+### Output validation
+- Always call `validateClassification()` on parsed output — model may return out-of-enum values
+- Clamp confidence scores to [0, 1] range
+- Never trust model output shape — validate every field before storing in DB
+
+### Fallback strategy
+```
+OPENAI_API_KEY set?
+  No  → stubClassify() immediately (no API call)
+  Yes → classifyWithGpt4o()
+          Success → validateClassification() → store
+          Failure → stubClassify() + log error (_source: 'stub_fallback')
+```
+- Stub responses must always return the SAME shape as real AI output
+- `_source` field tracks origin (gpt-4o / stub / stub_fallback) for debugging
+
+### What NOT to change
+- Do not switch to URL-based image input (presigned URLs expire — base64 is more reliable)
+- Do not use streaming for this use case (structured JSON output needs complete response)
+- Do not lower `max_tokens` below 600 (confidence object pushes response size up)
+
+---
+
+## Storage Service — MinIO
+
+### Modes
+- MinIO mode: `MINIO_ENDPOINT` env var is set → upload to bucket, serve presigned URLs
+- Local mode: `MINIO_ENDPOINT` absent → files stay in `UPLOAD_DIR`, served via `sendFile()`
+- Mode is determined once at startup and logged: `[Storage] Mode: MinIO (localhost:9000)`
+
+### MinIO client
+- Client is lazy-initialised (created on first use, not at module load)
+  - Prevents startup crash if MinIO is not yet healthy when module loads
+- Bucket auto-created on first upload via `ensureBucket()`
+
+### Upload flow
+```
+1. Multer saves to UPLOAD_DIR (temp)
+2. AI classifies from temp file path (reads as base64)
+3. storageService.uploadFile(localPath, filename, mimeType)
+   ├── MinIO mode: fPutObject → bucket
+   └── Local mode: no-op
+4. If MinIO mode: fs.unlinkSync(tempPath) — clean up temp file
+5. DB updated with filename (= MinIO object key)
+```
+
+### Image serving
+- MinIO: `presignedGetObject(bucket, objectName, 3600)` → redirect to 1-hour URL
+- Local: `res.sendFile(path.join(uploadDir, safeName))`
+- Always `path.basename()` on filename param before any fs or MinIO operation
+
+### What NOT to change
+- Do not cache presigned URLs in the DB — they expire and would go stale
+- Do not set TTL above 3600s without considering security implications
+- Do not make the MinIO bucket public — keep access through presigned URLs only

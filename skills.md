@@ -7,11 +7,11 @@
 | Language | Where used |
 |----------|-----------|
 | **JavaScript (ES2020+)** | Backend — Node.js, Express, all server-side logic |
-| **TypeScript (5.x)** | Frontend — all React components, hooks, API layer, types |
-| **SQL** | SQLite schema, prepared statements |
-| **CSS (custom properties)** | Frontend — full design system via CSS variables, no framework |
+| **TypeScript (5.x strict)** | Frontend — all React components, hooks, API layer, shared types |
+| **SQL** | SQLite schema, WAL-mode prepared statements |
+| **CSS (custom properties)** | Full design system via CSS variables — no framework |
 | **YAML** | Docker Compose configuration |
-| **Markdown** | All documentation files |
+| **Markdown** | Documentation (PLAN, DESIGN, DECISIONS, REFLECTION, README) |
 
 ---
 
@@ -19,19 +19,19 @@
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| **React** | 18.2 | UI framework, component model |
-| **TypeScript** | 5.x | Type safety across all components and API calls |
-| **Vite** | 5.x | Build tool, dev server, HMR |
-| **Fetch API** | native | HTTP calls to backend (no axios) |
+| **React** | 18.2 | UI framework, component model, hooks |
+| **TypeScript** | 5.x strict | Full type coverage across components, hooks, API layer |
+| **Vite** | 5.x | Build tool, dev server, hot module replacement |
+| **Fetch API** | native | HTTP calls to backend — no axios, no react-query |
 | Custom hooks | — | `useGarments` — polling, state, optimistic updates |
-| CSS Variables | — | Design token system (colors, radius, shadows, typography) |
+| CSS custom properties | — | Token-based design system (colors, radius, shadows, spacing) |
 
-**Patterns used:**
-- Custom hooks for data fetching + polling
-- Controlled components for forms
-- Prop drilling (shallow enough to not need Context at this scale)
-- Optimistic UI update on upload
-- Drag-and-drop via native HTML5 drag events
+**Patterns applied:**
+- Custom hooks as the data and state layer
+- Controlled components for all form inputs
+- Optimistic UI update on upload (card appears immediately)
+- Drag-and-drop via native HTML5 drag events (no library)
+- Polling every 5s via `setInterval` with cleanup on unmount
 
 ---
 
@@ -40,35 +40,43 @@
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **Node.js** | 20.x | Runtime |
-| **Express** | 4.18 | HTTP server, routing, middleware |
-| **better-sqlite3** | 9.x | Synchronous SQLite — database layer |
-| **Multer** | 1.4 | Multipart file upload handling |
-| **minio** | 7.x | S3-compatible object storage client |
-| **@anthropic-ai/sdk** | 0.39 | Vision model API for garment classification |
-| **express-rate-limit** | 7.x | Request rate limiting (60 req/min) |
-| **cors** | 2.x | Cross-origin resource sharing |
-| **dotenv** | 16.x | Environment variable loading |
-| **uuid** | 9.x | UUID v4 generation for garment IDs |
-| **sharp** | 0.33 | Image processing / file type validation |
+| **Express** | 4.18 | HTTP server, routing, middleware chain |
+| **better-sqlite3** | 9.x | Synchronous, embedded SQLite — zero-config database |
+| **Multer** | 1.4 | Multipart file upload, MIME validation, size limits |
+| **minio** | 7.x | S3-compatible object storage client (F2 requirement) |
+| **openai** | 4.x | GPT-4o vision API for garment image classification |
+| **express-rate-limit** | 7.x | 60 req/min per IP — protects AI API cost exposure |
+| **cors** | 2.x | Cross-origin resource sharing with explicit origin whitelist |
+| **dotenv** | 16.x | Environment variable loading from `.env` |
+| **uuid** | 9.x | UUID v4 for garment IDs |
+| **sharp** | 0.33 | Image processing, resizing, future EXIF stripping |
 
-**Patterns used:**
-- MVC separation: routes → controllers → services
-- Prepared statements (SQL injection prevention)
-- Service abstraction (`storageService.js`, `aiClassifier.js`)
-- Graceful degradation (stub AI, local disk fallback)
-- WAL mode SQLite for concurrent reads
+**Patterns applied:**
+- MVC: routes → controllers → services → db
+- Prepared statements for all SQL (injection prevention by architecture)
+- Service abstraction layer (`storageService.js`, `aiClassifier.js`) — swappable implementations
+- Graceful degradation: stub AI when no API key; local disk when no MinIO endpoint
+- WAL-mode SQLite for concurrent read access
+- Path traversal prevention via `path.basename()` on all user-supplied filenames
 
 ---
 
-## AI / Machine Learning
+## AI — GPT-4o Vision
 
-| Technology | Purpose |
-|------------|---------|
-| **Anthropic SDK** | Client for calling vision model |
-| **claude-haiku-4-5** | Fast, cost-effective vision model for structured classification |
-| **Prompt engineering** | Zero-shot structured JSON output with constrained enum values |
-| **Confidence scores** | Per-attribute 0–1 scores returned alongside classification |
-| **Stub classifier** | Realistic hardcoded fallback — no API key needed to demo |
+| Topic | Detail |
+|-------|--------|
+| **Model** | `gpt-4o` via OpenAI SDK |
+| **Image detail** | `"high"` — tiles image into 512px crops for fine-grained fabric/damage analysis |
+| **Output format** | `response_format: { type: "json_object" }` — guaranteed valid JSON, no regex parsing |
+| **Prompt strategy** | System prompt (expert context) → image → user instructions (schema + rubric) |
+| **Output schema** | `type`, `material`, `damage`, `complexity`, `notes`, `confidence` (per-attribute 0–1) |
+| **Fallback** | Stub classifier with 5 realistic responses — works without API key |
+| **Error recovery** | API failure → `stub_fallback` with `_error` field logged |
+
+**Why GPT-4o over alternatives:**
+- `response_format: json_object` eliminates fragile regex JSON parsing
+- `detail: "high"` significantly improves accuracy on fabric texture and small damage detection
+- System prompt + image-before-text ordering follows OpenAI's documented best practice for vision tasks
 
 ---
 
@@ -76,11 +84,12 @@
 
 | Technology | Purpose |
 |------------|---------|
-| **MinIO** | Self-hosted S3-compatible object storage for garment images |
-| **SQLite** | Embedded relational database (no external service needed) |
-| **Docker** | Containerisation of backend and frontend |
-| **Docker Compose** | Multi-service orchestration (MinIO + backend + frontend) |
-| **Nginx** | Serves React build in Docker; proxies `/api/*` to backend |
+| **MinIO** | Self-hosted S3-compatible object storage — satisfies F2 requirement |
+| **Presigned URLs** | 1-hour time-limited image access — no public bucket exposure |
+| **SQLite WAL mode** | Embedded database with concurrent read support |
+| **Docker** | Backend and frontend containerisation |
+| **Docker Compose** | Orchestrates MinIO + backend + frontend in one `docker compose up` |
+| **Nginx** | Serves Vite build in Docker; reverse-proxies `/api/*` to backend |
 
 ---
 
@@ -88,35 +97,48 @@
 
 | Tool | Purpose |
 |------|---------|
-| **nodemon** | Auto-restart backend on file changes (dev) |
-| **Vite HMR** | Hot module replacement in frontend (dev) |
-| **TypeScript compiler** | Type checking (`tsc --noEmit`) |
+| **nodemon** | Auto-restart backend on file save (dev) |
+| **Vite HMR** | Instant frontend updates without full reload (dev) |
+| **tsc --noEmit** | TypeScript type checking (zero errors in CI) |
 | **Git** | Version control |
 
 ---
 
 ## Architecture Patterns
 
-| Pattern | Applied where |
-|---------|--------------|
+| Pattern | Where |
+|---------|-------|
 | **MVC** | Backend: routes / controllers / services / db |
-| **Service layer** | `aiClassifier.js`, `storageService.js` — swappable implementations |
-| **Repository pattern (light)** | `db/database.js` — all SQL in one place via prepared statements |
-| **Graceful degradation** | AI stub, local disk fallback — system works without external dependencies |
-| **Polling** | Frontend refreshes queue every 5s — appropriate at 200 garments/week |
-| **Optimistic UI** | Uploaded garment appears in list immediately before server confirms |
-| **State machine** | `pending → classified → completed` with explicit transitions |
+| **Service layer** | `aiClassifier.js`, `storageService.js` — implementations are swappable |
+| **Repository (light)** | `db/database.js` — all SQL in one place as prepared statements |
+| **Graceful degradation** | Stub AI + local disk fallback — zero external dependencies for local dev |
+| **Optimistic UI** | Uploaded garment appears immediately in queue, reconciled on next poll |
+| **State machine** | `pending → classified → completed` with explicit DB transitions |
+| **Polling** | 5s interval — appropriate at ~1.7 garments/hour; no WebSocket complexity |
 
 ---
 
-## Concepts Demonstrated
+## Security Concepts Applied
 
-- REST API design (resource-oriented endpoints, correct HTTP verbs)
-- File upload handling and validation (MIME type, size limit, path traversal prevention)
-- Environment-based configuration (`.env`, Docker env vars)
-- S3-compatible object storage integration with presigned URLs
-- AI API integration with structured output and fallback strategy
-- SQLite WAL mode for concurrent-read workloads
-- Docker multi-stage builds (frontend: Node build → Nginx serve)
-- CSS design system using custom properties
-- TypeScript strict mode with full type coverage
+| Concept | Implementation |
+|---------|---------------|
+| Path traversal prevention | `path.basename()` on all user-supplied filenames |
+| MIME type validation | Multer `fileFilter` — whitelist of 3 types |
+| Rate limiting | 60 req/min per IP via `express-rate-limit` |
+| Secret management | All credentials in `.env` (gitignored), never in source |
+| CORS policy | Explicit origin whitelist via `ALLOWED_ORIGIN` env var |
+| SQL injection prevention | Prepared statements with named params — enforced by architecture |
+| Presigned URL TTL | 1-hour expiry — images not permanently exposed |
+
+---
+
+## Concepts Demonstrated Overall
+
+- REST API design (resource-oriented, correct HTTP verbs and status codes)
+- GPT-4o vision integration with structured JSON output and fallback strategy
+- S3-compatible object storage with presigned URL image serving
+- SQLite WAL-mode for embedded production-quality persistence
+- Docker multi-stage builds (Node → Nginx for frontend)
+- TypeScript strict mode with zero `any` usage
+- CSS design token system using custom properties
+- Scope management: MoSCoW prioritization, requirement challenges with justification

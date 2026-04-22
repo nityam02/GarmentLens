@@ -1,0 +1,49 @@
+---
+description: Security rules — apply to all files
+alwaysApply: true
+---
+
+# Security Rules
+
+## File Upload Security
+- MIME type validation is mandatory on every upload endpoint (`fileFilter` in Multer)
+- Allowed types: `image/jpeg`, `image/png`, `image/webp` only
+- Max file size enforced at Multer level (10MB) — never rely on client-side validation alone
+- ALWAYS use `path.basename(filename)` before any `fs` operation on user-supplied filenames
+  - Prevents path traversal: `../../.env` → `.env` (safe, won't exist in upload dir)
+- File content (magic byte) validation is a known gap — adding `file-type` library is the fix
+
+## Input Validation
+- Validate all user-supplied strings at the controller boundary before they touch the DB
+- Enum fields (type, material, damage, complexity) must be validated against allowed values
+- Never trust `req.params`, `req.query`, or `req.body` without validation
+- Multer fields: only accept the field name `image` — reject unknown multipart fields
+
+## SQL Injection Prevention
+- All SQL uses prepared statements with named parameters (`@param`) — never string interpolation
+- This is enforced by architecture: all SQL lives in `db/database.js` prepared at startup
+
+## Secrets and Credentials
+- All credentials in `.env` (gitignored) — never in source code, never in logs
+- `.env.sample` contains only placeholder values, never real keys
+- MinIO credentials (`MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`) treated as secrets
+- OpenAI API key (`OPENAI_API_KEY`) treated as secret — never log it, never return it in API responses
+
+## Rate Limiting
+- express-rate-limit is applied globally: 60 requests/minute per IP
+- Upload endpoint is the most sensitive — rate limit protects against AI API cost abuse
+- Do not remove or raise limits without documenting the reason
+
+## CORS
+- `ALLOWED_ORIGIN` env var controls allowed origin — never use `origin: '*'` in production
+- Only GET and PATCH for existing resources, POST for creation — no DELETE exposed to frontend
+
+## HTTP Headers
+- Do not expose Express version (`app.disable('x-powered-by')` — add if not present)
+- Presigned MinIO URLs are time-limited (1 hour TTL) — images are not permanently public
+
+## Known Gaps (documented, not ignored)
+1. No magic-byte validation — MIME header spoofing possible. Fix: add `file-type` library.
+2. No auth — intentional for MVP (internal network tool). Document in README.
+3. No HTTPS enforcement — intended for local/internal use only. Add reverse proxy (nginx + cert) before any external exposure.
+4. No EXIF GPS stripping — images may contain location metadata. Fix: add `sharp` strip metadata call before upload.
