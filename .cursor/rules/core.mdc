@@ -1,0 +1,50 @@
+---
+description: Core rules — always active for all files in this project
+alwaysApply: true
+---
+
+# GarmentLens — Core Rules
+
+## Project Identity
+- Internal garment repair intake tool: single store, ~200 garments/week
+- Backend: Node.js 20 + Express 4 + SQLite + MinIO + OpenAI GPT-4o
+- Frontend: React 18 + TypeScript 5 + Vite (no UI framework)
+- DO NOT suggest technologies outside this stack without explicit approval
+
+## Naming Conventions
+- Variables and functions: `camelCase`
+- React components, classes, types, interfaces: `PascalCase`
+- Environment constants: `UPPER_SNAKE_CASE`
+- Backend files: `camelCase.js` | React components: `PascalCase.tsx` | Hooks/utils: `camelCase.ts`
+
+## Formatting
+- 2-space indentation, no tabs
+- Single quotes in JS/TS; double quotes in JSX attributes
+- Trailing commas on all multiline objects and arrays
+- Max line length: 120 characters
+- No semicolons in plain JS files; semicolons required in TypeScript files
+
+## Functions
+- Arrow functions everywhere (callbacks, utilities, components)
+- Named exports preferred over default exports
+- Max 40 lines per function — extract helpers if longer
+- One function, one responsibility
+
+## Error Handling (non-negotiable)
+- Always try/catch around async operations
+- Backend always returns `{ error: "message" }` — never expose stack traces
+- Frontend errors go into component state, never console.log in production paths
+- Never silently swallow errors — log at minimum
+
+## Comments
+- No comments explaining WHAT — well-named identifiers do that
+- Comments only for WHY: security decisions, non-obvious constraints, upstream bug workarounds
+- Zero commented-out code in any commit
+
+## Hard Constraints — Never Suggest These
+- No authentication (single-user internal tool, deliberately excluded from MVP)
+- No WebSockets (5s polling is correct at this volume)
+- No Redis, Bull, or job queues (synchronous AI is MVP-appropriate)
+- No Tailwind or any CSS framework (CSS variable system is the design system)
+- No ORM — raw SQLite prepared statements only
+- No frontend routing — single page app by design

@@ -1,0 +1,88 @@
+---
+description: Frontend rules for React + TypeScript — apply to all files under frontend/src/
+globs: frontend/src/**/*.{ts,tsx}
+---
+
+# Frontend Rules — React 18 + TypeScript 5
+
+## TypeScript Standards
+- `strict: true` always — no exceptions
+- No `any` — use `unknown` with explicit narrowing if type is truly dynamic
+- Import types separately: `import type { Foo } from './types'`
+- All component props defined as a `interface Props { ... }` directly above the component
+- All API response shapes defined in `src/types/index.ts` — single source of truth
+
+## Component Rules
+- Functional components only — no class components
+- One component per file, filename matches component name (`GarmentCard.tsx`)
+- Max 150 lines per component — extract sub-components or custom hooks if longer
+- No business logic inside JSX — extract to hooks or helper functions
+- No inline event handlers with complex logic — extract to named handlers
+
+```tsx
+// Correct
+const handleSave = async () => {
+  setSaving(true)
+  try { await onSave(form) } finally { setSaving(false) }
+}
+
+// Wrong — don't put async logic inline in JSX
+<button onClick={async () => { setSaving(true); await onSave(form); setSaving(false) }}>
+```
+
+## Hooks Rules
+- Custom hooks in `src/hooks/` — prefix with `use`
+- Hooks handle: data fetching, polling, state coordination, side effects
+- Components only call hooks — they do not call `fetch()` directly
+- Cleanup all intervals and subscriptions in useEffect return function
+
+```typescript
+// All polling must have cleanup
+useEffect(() => {
+  load()
+  const interval = setInterval(load, POLL_INTERVAL_MS)
+  return () => clearInterval(interval)
+}, [load])
+```
+
+## API Layer
+- All `fetch()` calls live in `src/api/garments.ts` only
+- Never call `fetch()` inside a component or hook directly
+- Always handle non-ok responses: check `res.ok`, parse error body, throw with message
+- Type all API functions with explicit return types: `Promise<Garment>`, `Promise<Garment[]>`
+
+```typescript
+// Correct API function pattern
+export const fetchGarments = async (): Promise<Garment[]> => {
+  const res = await fetch('/api/garments')
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error((body as { error?: string }).error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+```
+
+## State Management
+- Local `useState` for UI state (loading, error, modal open/closed)
+- Custom hooks for server state (garment list, polling)
+- No Redux, Zustand, or Context API unless the state genuinely needs to cross 3+ component levels
+- Optimistic updates: add item to local state immediately, reconcile on next poll
+
+## CSS Rules
+- All styles in `src/app.css` using the existing CSS variable system
+- New CSS variables go in `:root` at the top of `app.css`
+- Class names: BEM-inspired kebab-case (`garment-card__header`, `btn--primary`)
+- No inline styles except computed values (e.g., dynamic width for progress bars)
+- No `!important` — fix specificity properly
+
+## Accessibility (baseline only — not WCAG AA for MVP)
+- All `<button>` elements have visible text or `aria-label`
+- All `<img>` elements have descriptive `alt` text
+- Form labels must be associated with inputs via `htmlFor` / `id` pairing
+- Focus is not trapped or lost when modals open/close
+
+## Performance
+- No premature optimisation — add `React.memo` / `useCallback` only with a measured reason
+- Images served via MinIO presigned URLs — no base64 data URIs in rendered HTML
+- Poll interval is 5000ms minimum — do not reduce without discussing scaling impact

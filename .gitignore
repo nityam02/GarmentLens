@@ -1,0 +1,7 @@
+node_modules/
+backend/uploads/
+backend/garmentlens.db
+backend/.env
+*.zip
+.DS_Store
+dist/

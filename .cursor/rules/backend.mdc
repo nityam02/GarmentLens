@@ -1,0 +1,73 @@
+---
+description: Backend rules for Node.js/Express — apply to all files under backend/src/
+globs: backend/src/**/*.js
+---
+
+# Backend Rules — Node.js + Express
+
+## Module System
+- CommonJS only (`require` / `module.exports`) — do NOT use ESM (`import`/`export`) in backend
+- All third-party clients (OpenAI, MinIO) instantiated inside their service file, never in controllers or routes
+
+## Architecture Layers — strict separation
+
+```
+routes/       → define URL + HTTP method, attach middleware, delegate to controller
+controllers/  → parse req, call services, send res — NO business logic, NO SQL
+services/     → business logic, external API calls (AI, storage)
+db/           → ALL SQL here as prepared statements — nothing else touches the DB
+middleware/   → reusable Express middleware (upload, rate limit)
+```
+
+### Rules per layer
+- Routes: 1 line per route (`router.post('/', upload.single('image'), handler)`)
+- Controllers: max 30 lines, no direct DB access, no `require('minio')` or `require('openai')`
+- Services: pure functions where possible, explicit error propagation (throw, don't swallow)
+- DB: all queries as `db.prepare(...)` statements at module load time, never inside functions
+
+## Express Patterns
+```javascript
+// Correct async controller pattern
+const myHandler = async (req, res) => {
+  try {
+    const result = await myService.doWork(req.body)
+    res.json(result)
+  } catch (err) {
+    console.error('[myHandler]', err.message)
+    res.status(500).json({ error: err.message || 'Internal server error' })
+  }
+}
+```
+
+## HTTP Status Codes
+| Situation | Code |
+|-----------|------|
+| Created resource | 201 |
+| Successful GET/PATCH | 200 |
+| Bad client input | 400 |
+| Not found | 404 |
+| File too large | 413 |
+| Server error | 500 |
+
+## SQL Rules
+- All queries are prepared statements (`db.prepare(...)`) loaded at startup
+- Named parameters (`@param`) not positional `?` — clearer for multi-param queries
+- WAL mode always enabled (already set in `db/database.js`)
+- Never construct SQL strings with user input (even inside services)
+
+## File Upload Rules
+- Multer is the only middleware that touches `req.file`
+- Validate MIME type in `fileFilter` — allowed: `image/jpeg`, `image/png`, `image/webp`
+- Always use `path.basename()` before any file system access on user-supplied filenames
+- Temp files must be deleted after MinIO upload (or on failure)
+
+## Environment Config
+- All config via `process.env` — never hardcode URLs, ports, or credentials
+- Optional services (AI, MinIO): check env var presence, degrade gracefully if absent
+- Log mode at startup: `[AI] Mode: GPT-4o vision` or `stub`
+
+## Logging
+- Format: `[Service] message` e.g. `[AI]`, `[Storage]`, `[ERROR]`
+- Log errors with `console.error('[context]', err.message)`
+- Log key state changes at `console.log` level
+- Never log request bodies or file contents (could contain PII)
