@@ -107,32 +107,39 @@ Response:
 
 ```
 garmentlens/
+├── README.md
+├── CLAUDE.md                     # Context for Claude Code
+├── AGENTS.md                     # Context for all AI agents
+├── docker-compose.yml
+│
+├── docs/                         # All project documentation
+│   ├── PLAN.md                   # MoSCoW prioritization + time budget
+│   ├── REFLECTION.md             # Post-implementation retrospective
+│   ├── DECISIONS.md              # Architecture Decision Records
+│   └── design.md                 # Full system design doc
+│
 ├── backend/
 │   ├── src/
-│   │   ├── index.js                  # Express server entry
-│   │   ├── db/database.js            # SQLite setup + prepared statements
-│   │   ├── routes/garments.js        # Route definitions
+│   │   ├── app.js                # Express app factory (no listen)
+│   │   ├── server.js             # Entry point: app.listen()
+│   │   ├── config/index.js       # All env var reads
+│   │   ├── common/               # errors.js, logger.js
+│   │   ├── routes/garments.js
 │   │   ├── controllers/garmentsController.js
-│   │   ├── middleware/upload.js      # Multer + file validation
-│   │   └── services/aiClassifier.js  # Claude API + stub fallback
-│   ├── uploads/                      # Garment images (gitignored)
-│   └── garmentlens.db                # SQLite database (auto-created)
-├── frontend/
-│   └── src/
-│       ├── App.tsx
-│       ├── app.css
-│       ├── types/index.ts
-│       ├── api/garments.ts
-│       ├── hooks/useGarments.ts
-│       └── components/
-│           ├── UploadForm.tsx
-│           ├── GarmentList.tsx
-│           ├── GarmentCard.tsx
-│           └── OverrideModal.tsx
-├── PLAN.md
-├── DECISIONS.md
-├── REFLECTION.md
-└── docker-compose.yml
+│   │   ├── middleware/upload.js
+│   │   ├── repositories/garmentRepository.js  # All SQL
+│   │   └── services/             # garmentService, aiClassifier, storageService
+│   ├── tests/
+│   │   ├── unit/                 # aiClassifier, garmentService
+│   │   └── integration/          # garments.api (supertest)
+│   └── garmentlens.db            # SQLite (auto-created, gitignored in prod)
+│
+└── frontend/src/
+    ├── App.tsx, app.css
+    ├── types/index.ts
+    ├── api/garments.ts
+    ├── hooks/useGarments.ts
+    └── components/               # UploadForm, GarmentList, GarmentCard, OverrideModal
 ```
 
 ---
