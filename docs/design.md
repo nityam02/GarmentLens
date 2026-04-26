@@ -119,7 +119,7 @@
 ## 5. AI Classification Design
 
 ### Model
-`claude-haiku-4-5` via Anthropic SDK — fastest Claude model with vision capability. Sufficient for structured output tasks with a constrained schema.
+`gpt-4o` via OpenAI SDK — best-in-class vision model with Structured Outputs support (`json_schema`, `strict: true`). Guarantees exact schema compliance with no post-processing or validation needed.
 
 ### Output schema
 ```json

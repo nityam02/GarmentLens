@@ -54,13 +54,13 @@ Storage is abstracted in `services/storageService.js`. The controller and AI cla
 
 ---
 
-## ADR-006: Claude Haiku for AI classification
+## ADR-006: GPT-4o for AI classification
 
-**Decision**: Use `claude-haiku-4-5` (not Sonnet or Opus).
+**Decision**: Use `gpt-4o` (OpenAI) with Structured Outputs (`json_schema`, `strict: true`).
 
-**Reason**: Haiku is the fastest and cheapest Claude model with vision capability. For a structured JSON classification task with a constrained output schema, Haiku is sufficient. Opus would add latency and cost for the same output.
+**Reason**: GPT-4o vision with `detail: high` tiles the image into 512 px crops for fine-grained fabric and damage analysis. Structured Outputs with strict mode guarantees the exact response schema — no enum validation, no regex fallback, no `try/catch` around JSON.parse. The `OPENAI_API_KEY` is already set in `.env`.
 
-**Trade-off**: Slightly lower accuracy on ambiguous images compared to Sonnet. Mitigation: manual override is a core feature.
+**Trade-off**: GPT-4o is more expensive per call than a smaller model. Mitigation: stub fallback works out of the box with no key; rate limiting (60 req/min) caps cost exposure.
 
 ---
 

@@ -16,7 +16,7 @@ Internal intake tool for repair businesses. Upload a garment photo → AI classi
 cd backend
 npm install
 cp .env.sample .env
-# Optional: add your ANTHROPIC_API_KEY to .env for real AI classification
+# Optional: add your OPENAI_API_KEY to .env for real AI classification
 # Without it, a realistic stub classifier runs automatically
 npm run dev
 ```
@@ -42,7 +42,7 @@ Open http://localhost:5173 in your browser.
 ```bash
 # From the garmentlens/ root
 cp backend/.env.sample backend/.env
-# Optional: edit backend/.env to add ANTHROPIC_API_KEY
+# Optional: edit backend/.env to add OPENAI_API_KEY
 
 docker compose up --build
 ```
@@ -59,7 +59,7 @@ The app supports two modes, selected automatically:
 
 | Mode | When | Behaviour |
 |------|------|-----------|
-| **Claude vision** | `ANTHROPIC_API_KEY` is set | Calls `claude-haiku-4-5` with the garment image |
+| **GPT-4o vision** | `OPENAI_API_KEY` is set | Calls `gpt-4o` with the garment image (Structured Outputs) |
 | **Stub** | No API key | Returns randomised realistic classification instantly |
 
 No configuration needed — stub mode works out of the box.
@@ -149,7 +149,7 @@ garmentlens/
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SERVICE_PORT` | `3001` | Backend port |
-| `ANTHROPIC_API_KEY` | _(empty)_ | Optional. Enables real AI classification |
+| `OPENAI_API_KEY` | _(empty)_ | Optional. Enables real AI classification |
 | `UPLOAD_DIR` | `./uploads` | Directory to store images |
 | `MAX_FILE_SIZE_MB` | `10` | Upload size limit |
 | `ALLOWED_ORIGIN` | `http://localhost:5173` | CORS allowed origin |
@@ -158,4 +158,4 @@ garmentlens/
 
 ## AI Usage
 
-This project uses the Anthropic SDK (`@anthropic-ai/sdk`) with `claude-haiku-4-5` for garment image classification. The model receives the uploaded image as base64 and returns a structured JSON object with garment type, material, damage type, repair complexity, and per-attribute confidence scores. All prompt design and fallback logic live in `backend/src/services/aiClassifier.js`.
+This project uses the OpenAI SDK with `gpt-4o` (vision) for garment image classification. The model receives the uploaded image as base64 and returns a strictly-typed JSON object via Structured Outputs (`response_format: json_schema`, `strict: true`) — guaranteeing the exact schema with no validation needed. Output includes garment type, material, damage type, repair complexity, and per-attribute confidence scores. All prompt design and fallback logic live in `backend/src/services/aiClassifier.js`.

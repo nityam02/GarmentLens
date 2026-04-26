@@ -32,7 +32,7 @@ SQLite with WAL mode handles concurrent reads well but serializes writes. At >5 
 
 ## AI Usage
 
-- **Claude Haiku (runtime model)**: Used for garment image classification via the Anthropic SDK (`@anthropic-ai/sdk`). The classification prompt was designed and iterated manually to return reliable structured JSON. A stub fallback was written to handle cases where no API key is set or the model returns malformed output.
+- **GPT-4o (runtime model)**: Used for garment image classification via the OpenAI SDK. Structured Outputs (`json_schema`, `strict: true`) guarantees the exact response schema — no manual validation needed. A stub fallback handles the no-API-key case; the fallback also fires on any API error, annotated with `_source: 'stub_fallback'`.
 
 ## Total Time Spent
 
