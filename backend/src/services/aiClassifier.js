@@ -50,58 +50,53 @@ const STUB_RESPONSES = [
   },
 ]
 
+// Strict JSON Schema — Structured Outputs enforces exact compliance, no regex fallback needed
+const CLASSIFICATION_SCHEMA = {
+  name: 'garment_classification',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      type: { type: 'string', enum: GARMENT_TYPES },
+      material: { type: 'string', enum: MATERIALS },
+      damage: { type: 'string', enum: DAMAGES },
+      complexity: { type: 'string', enum: COMPLEXITIES },
+      notes: {
+        type: 'string',
+        description: '1-2 sentences: garment description and specific damage location. Use empty string if no damage.',
+      },
+      confidence: {
+        type: 'object',
+        properties: {
+          type: { type: 'number', description: '0.0–1.0 confidence in garment type classification' },
+          material: { type: 'number', description: '0.0–1.0 confidence in material identification' },
+          damage: { type: 'number', description: '0.0–1.0 confidence in damage assessment' },
+          complexity: { type: 'number', description: '0.0–1.0 confidence in repair complexity estimate' },
+        },
+        required: ['type', 'material', 'damage', 'complexity'],
+        additionalProperties: false,
+      },
+    },
+    required: ['type', 'material', 'damage', 'complexity', 'notes', 'confidence'],
+    additionalProperties: false,
+  },
+}
+
 // System prompt sets expert context — placed before image per OpenAI best practice
 const SYSTEM_PROMPT = `You are an expert garment repair classifier at a professional tailor shop with 20+ years of experience.
 Your job is to analyze garment photos and produce accurate intake classifications for repair work.
 You have deep knowledge of fabric types, common damage patterns, and repair complexity.
-Always respond with valid JSON only — no markdown, no explanation, no preamble.`
+Set confidence scores based on image clarity: use 0.5–0.7 when ambiguous, 0.8–0.95 when clear.`
 
-// User prompt is sent after the image in the content array
-const buildUserPrompt = () => `Analyze this garment image carefully. Examine the fabric texture, weave pattern, visible damage, and construction details.
-
-Return a JSON object with exactly this structure:
-{
-  "type": one of ${JSON.stringify(GARMENT_TYPES)},
-  "material": one of ${JSON.stringify(MATERIALS)},
-  "damage": one of ${JSON.stringify(DAMAGES)},
-  "complexity": one of ${JSON.stringify(COMPLEXITIES)},
-  "notes": "1-2 sentences: garment description + specific damage location and nature",
-  "confidence": {
-    "type": <0.0–1.0>,
-    "material": <0.0–1.0>,
-    "damage": <0.0–1.0>,
-    "complexity": <0.0–1.0>
-  }
-}
+const USER_PROMPT = `Analyze this garment carefully. Examine fabric texture, weave pattern, visible damage, and construction details.
 
 Complexity rubric:
 - low: single simple repair (replace button, minor hem stitch, small patch)
 - medium: requires skill (seam reconstruction, zipper replacement, lining repair)
 - high: complex work or delicate material (full reconstruction, silk/leather, multiple damage areas)
 
-Set confidence based on image clarity and certainty. Use lower scores (0.5–0.7) when the image is unclear or ambiguous.`
-
-const validateClassification = (data) => {
-  if (!GARMENT_TYPES.includes(data.type)) data.type = 'other'
-  if (!MATERIALS.includes(data.material)) data.material = 'unknown'
-  if (!DAMAGES.includes(data.damage)) data.damage = 'none_visible'
-  if (!COMPLEXITIES.includes(data.complexity)) data.complexity = 'low'
-
-  const clamp = (v) => Math.min(1, Math.max(0, typeof v === 'number' ? v : 0.5))
-  data.confidence = {
-    type: clamp(data.confidence?.type),
-    material: clamp(data.confidence?.material),
-    damage: clamp(data.confidence?.damage),
-    complexity: clamp(data.confidence?.complexity),
-  }
-
-  return data
-}
-
-const stubClassify = () => ({
-  ...STUB_RESPONSES[Math.floor(Math.random() * STUB_RESPONSES.length)],
-  _source: 'stub',
-})
+Fill notes with a 1-2 sentence description: garment type + specific damage location and nature.
+If no damage is visible, describe the garment and write an empty string for notes.`
 
 const getMediaType = (imagePath) => {
   const ext = path.extname(imagePath).toLowerCase()
@@ -118,9 +113,9 @@ const classifyWithGpt4o = async (imagePath) => {
 
   const response = await client.chat.completions.create({
     model: 'gpt-4o',
-    max_tokens: 600,
-    // JSON mode — GPT-4o guarantees valid JSON output, no regex parsing needed
-    response_format: { type: 'json_object' },
+    max_tokens: 800,
+    // Structured Outputs: strict schema guarantees valid JSON with exact field types and enums
+    response_format: { type: 'json_schema', json_schema: CLASSIFICATION_SCHEMA },
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       {
@@ -130,20 +125,24 @@ const classifyWithGpt4o = async (imagePath) => {
             type: 'image_url',
             image_url: {
               url: `data:${mediaType};base64,${base64}`,
-              // high detail: GPT-4o splits image into 512px tiles for fine-grained analysis
-              // better at detecting fabric texture, seam damage, small tears
+              // high detail: tiles image into 512px crops for fine-grained fabric/damage analysis
               detail: 'high',
             },
           },
-          { type: 'text', text: buildUserPrompt() },
+          { type: 'text', text: USER_PROMPT },
         ],
       },
     ],
   })
 
   const parsed = JSON.parse(response.choices[0].message.content)
-  return { ...validateClassification(parsed), _source: 'gpt-4o' }
+  return { ...parsed, _source: 'gpt-4o' }
 }
+
+const stubClassify = () => ({
+  ...STUB_RESPONSES[Math.floor(Math.random() * STUB_RESPONSES.length)],
+  _source: 'stub',
+})
 
 const classifyGarment = async (imagePath) => {
   if (!process.env.OPENAI_API_KEY) {

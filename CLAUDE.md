@@ -4,7 +4,7 @@
 Internal intake tool for a single-store garment repair business. An employee uploads a photo, AI classifies the garment, tailors view and claim items from a queue.
 
 ## Stack
-- **Backend**: Node.js 20, Express 4, SQLite (better-sqlite3), MinIO (minio SDK), Anthropic SDK
+- **Backend**: Node.js 20, Express 4, SQLite (better-sqlite3), MinIO (minio SDK), OpenAI SDK (GPT-4o vision)
 - **Frontend**: React 18, TypeScript 5, Vite 5, plain CSS (no framework)
 - **Infrastructure**: Docker Compose (MinIO + backend + frontend/nginx)
 
@@ -17,7 +17,7 @@ garmentlens/
 │   ├── routes/garments.js        ← Route definitions only
 │   ├── controllers/garmentsController.js  ← HTTP handlers
 │   ├── middleware/upload.js      ← Multer config, file validation
-│   ├── services/aiClassifier.js  ← Anthropic vision API + stub fallback
+│   ├── services/aiClassifier.js  ← GPT-4o vision (Structured Outputs) + stub fallback
 │   └── services/storageService.js ← MinIO upload + presigned URL + local fallback
 └── frontend/src/
     ├── App.tsx                   ← Root layout
@@ -36,7 +36,7 @@ garmentlens/
 - Backend uses CommonJS (`require`/`module.exports`)
 - All SQL lives in `db/database.js` as prepared statements — never raw SQL elsewhere
 - All fetch calls go through `api/garments.ts` — never fetch() in components
-- AI and storage are abstracted in services — controllers never import minio or Anthropic directly
+- AI and storage are abstracted in services — controllers never import minio or OpenAI directly
 - Both AI and storage degrade gracefully: stub classifier if no API key; local disk if no MinIO endpoint
 
 ## Status Flow
@@ -46,7 +46,7 @@ garmentlens/
 - completed: tailor claimed the garment
 
 ## Environment Variables (see backend/.env.sample)
-- `ANTHROPIC_API_KEY` — optional, stub mode if absent
+- `OPENAI_API_KEY` — optional, stub mode if absent (GPT-4o vision with Structured Outputs)
 - `MINIO_ENDPOINT` — optional, local disk fallback if absent
 - `SERVICE_PORT` — backend port (default 3001)
 - `ALLOWED_ORIGIN` — CORS origin (default http://localhost:5173)

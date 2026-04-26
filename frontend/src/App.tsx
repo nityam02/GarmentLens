@@ -6,16 +6,30 @@ import { useGarments } from './hooks/useGarments'
 export const App = () => {
   const { garments, loading, error, addGarment, markComplete, saveOverride } = useGarments()
 
+  const activeCount = garments.filter((g) => g.status !== 'completed').length
+  const completedCount = garments.filter((g) => g.status === 'completed').length
+
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-inner">
           <div className="brand">
-            <span className="brand-icon">🧵</span>
+            <div className="brand-mark">GL</div>
             <span className="brand-name">GarmentLens</span>
             <span className="brand-sub">Intake</span>
           </div>
-          <div className="header-meta">
+          <div className="header-right">
+            <div className="header-stats">
+              <span className="header-stat">
+                <span className="header-stat-val">{activeCount}</span>
+                <span className="header-stat-label">In queue</span>
+              </span>
+              <span className="header-stat-divider" />
+              <span className="header-stat">
+                <span className="header-stat-val">{completedCount}</span>
+                <span className="header-stat-label">Done today</span>
+              </span>
+            </div>
             <span className="header-tag">Internal Tool</span>
           </div>
         </div>

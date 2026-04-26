@@ -17,15 +17,18 @@ const COMPLEXITY_COLOR: Record<string, string> = {
 
 const pct = (n: number) => `${Math.round(n * 100)}%`
 
-const ConfidenceBar = ({ label, value }: { label: string; value: number }) => (
-  <div className="confidence-row">
-    <span className="confidence-label">{label}</span>
-    <div className="confidence-track">
-      <div className="confidence-fill" style={{ width: pct(value), background: value > 0.8 ? 'var(--green)' : value > 0.6 ? 'var(--amber)' : 'var(--red)' }} />
+const ConfidenceBar = ({ label, value }: { label: string; value: number }) => {
+  const color = value > 0.8 ? 'var(--green)' : value > 0.6 ? 'var(--amber)' : 'var(--red)'
+  return (
+    <div className="confidence-row">
+      <span className="confidence-label">{label}</span>
+      <div className="confidence-track">
+        <div className="confidence-fill" style={{ width: pct(value), background: color }} />
+      </div>
+      <span className="confidence-pct">{pct(value)}</span>
     </div>
-    <span className="confidence-pct">{pct(value)}</span>
-  </div>
-)
+  )
+}
 
 const ClassificationView = ({ cls, label, isOverride }: { cls: Omit<Classification, 'confidence'> & { confidence?: Classification['confidence'] }; label: string; isOverride?: boolean }) => (
   <div className={`classification ${isOverride ? 'classification--override' : ''}`}>
@@ -82,15 +85,18 @@ export const GarmentCard = ({ garment, onComplete, onOverride }: Props) => {
             src={getImageUrl(garment.filename)}
             alt={garment.originalName}
             className="card-image"
-            onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%23eee"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="12" fill="%23aaa">No image</text></svg>' }}
+            onError={(e) => {
+              ;(e.target as HTMLImageElement).src =
+                'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88"><rect width="88" height="88" fill="%23eceef0"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="9" fill="%2376777d" font-family="sans-serif">No image</text></svg>'
+            }}
           />
+          <div className="card-time">{fmt(garment.createdAt)}</div>
         </div>
 
         <div className="card-content">
           <div className="card-header">
-            <span className="card-name">{garment.originalName}</span>
+            <span className="card-name" title={garment.originalName}>{garment.originalName}</span>
             <span className={`status-badge ${STATUS_CLASS[garment.status]}`}>{STATUS_LABEL[garment.status]}</span>
-            <span className="card-time">{fmt(garment.createdAt)}</span>
           </div>
 
           {garment.override && garment.ai && (
@@ -107,13 +113,17 @@ export const GarmentCard = ({ garment, onComplete, onOverride }: Props) => {
               isOverride={!!garment.override}
             />
           ) : (
-            <p className="no-classification">{garment.status === 'pending' ? 'Classifying...' : 'Classification failed'}</p>
+            <p className="no-classification">
+              {garment.status === 'pending'
+                ? <span className="classifying-indicator"><span className="spinner" />Classifying…</span>
+                : 'Classification failed'}
+            </p>
           )}
 
           {garment.status !== 'completed' && (
             <div className="card-actions">
               <button className="btn btn--secondary btn--sm" onClick={() => setShowOverride(true)}>
-                Edit Classification
+                Edit
               </button>
               {garment.status === 'classified' && (
                 <button className="btn btn--success btn--sm" onClick={handleComplete} disabled={completing}>
