@@ -1,73 +1,100 @@
 # GarmentLens — Project Context for Claude Code
 
 ## What this is
-Internal intake tool for a single-store garment repair business. An employee uploads a photo, AI classifies the garment, tailors view and claim items from a queue.
+Internal intake tool for a single-store garment repair business.
+Employee uploads a photo → AI classifies the garment → tailors view and claim items from a queue.
+
+---
 
 ## Stack
-- **Backend**: Node.js 20, Express 4, SQLite (better-sqlite3), MinIO (minio SDK), OpenAI SDK (GPT-4o vision)
+- **Backend**: Node.js 20, Express 4 (CommonJS), SQLite (`better-sqlite3`), MinIO SDK, OpenAI SDK (GPT-4o vision)
 - **Frontend**: React 18, TypeScript 5, Vite 5, plain CSS (no framework)
+- **Tests**: Jest + Supertest (unit + integration)
 - **Infrastructure**: Docker Compose (MinIO + backend + frontend/nginx)
 
-## Directory Structure
+---
+
+## Repository Layout
 ```
 garmentlens/
+├── README.md                     ← Setup instructions (start here)
+├── CLAUDE.md                     ← This file
+├── AGENTS.md                     ← Context for all AI agents (read this too)
+├── docker-compose.yml
+│
+├── docs/                         ← All project documentation
+│   ├── PLAN.md                   ← MoSCoW + time budget (pre-code)
+│   ├── REFLECTION.md             ← Post-implementation retrospective
+│   ├── DECISIONS.md              ← Architecture Decision Records
+│   ├── design.md                 ← Full system design doc
+│   └── skills.md                 ← Skills demonstrated
+│
 ├── backend/src/
-│   ├── index.js                  ← Express server entry, middleware setup
-│   ├── db/database.js            ← SQLite schema + ALL prepared statements
+│   ├── app.js                    ← Express app factory (no listen — tests import this)
+│   ├── server.js                 ← Entry: calls app.listen()
+│   ├── config/index.js           ← ALL env var reads live here
+│   ├── common/errors.js          ← Domain error classes
+│   ├── common/logger.js          ← Structured logger (silent in tests)
 │   ├── routes/garments.js        ← Route definitions only
-│   ├── controllers/garmentsController.js  ← HTTP handlers
-│   ├── middleware/upload.js      ← Multer config, file validation
-│   ├── services/aiClassifier.js  ← GPT-4o vision (Structured Outputs) + stub fallback
-│   └── services/storageService.js ← MinIO upload + presigned URL + local fallback
+│   ├── controllers/garmentsController.js  ← HTTP adapter
+│   ├── middleware/upload.js       ← Multer + MIME validation
+│   ├── repositories/garmentRepository.js  ← ALL SQL (prepared statements)
+│   └── services/
+│       ├── garmentService.js     ← Business logic
+│       ├── aiClassifier.js       ← GPT-4o vision + stub fallback
+│       └── storageService.js     ← MinIO / local-disk abstraction
+│
+├── backend/tests/
+│   ├── unit/aiClassifier.test.js
+│   ├── unit/garmentService.test.js
+│   └── integration/garments.api.test.js
+│
 └── frontend/src/
-    ├── App.tsx                   ← Root layout
-    ├── app.css                   ← Full CSS design system (CSS variables)
-    ├── types/index.ts            ← All shared TypeScript types
-    ├── api/garments.ts           ← All fetch calls (single source of truth)
-    ├── hooks/useGarments.ts      ← Polling, state, optimistic updates
-    └── components/
-        ├── UploadForm.tsx        ← Drag-drop upload, loading state
-        ├── GarmentList.tsx       ← Queue with active/completed sections
-        ├── GarmentCard.tsx       ← Classification display + confidence bars
-        └── OverrideModal.tsx     ← Edit classification form
+    ├── App.tsx, app.css
+    ├── types/index.ts, api/garments.ts, hooks/useGarments.ts
+    └── components/ (UploadForm, GarmentList, GarmentCard, OverrideModal)
 ```
 
-## Key Conventions
-- Backend uses CommonJS (`require`/`module.exports`)
-- All SQL lives in `db/database.js` as prepared statements — never raw SQL elsewhere
-- All fetch calls go through `api/garments.ts` — never fetch() in components
-- AI and storage are abstracted in services — controllers never import minio or OpenAI directly
-- Both AI and storage degrade gracefully: stub classifier if no API key; local disk if no MinIO endpoint
+---
+
+## Critical Architectural Rules
+
+- **`config/index.js`** is the only place that reads `process.env` — everywhere else imports from config
+- **`garmentRepository.js`** owns all SQL — no raw queries in services or controllers
+- **Controllers are HTTP adapters only** — no business logic, no SQL, no AI calls
+- **Services throw domain errors** (`NotFoundError`, `ConflictError`) — the global handler in `app.js` maps them to HTTP status codes
+- **`app.js` must not call `app.listen()`** — integration tests import it without binding a port
+- **All frontend fetch calls go through `api/garments.ts`** — never fetch() in components
+
+---
 
 ## Status Flow
-`pending` → `classified` (or `classification_failed`) → `completed`
-- pending: file uploaded, AI classifying
-- classified: AI done, awaiting tailor
-- completed: tailor claimed the garment
-
-## Environment Variables (see backend/.env.sample)
-- `OPENAI_API_KEY` — optional, stub mode if absent (GPT-4o vision with Structured Outputs)
-- `MINIO_ENDPOINT` — optional, local disk fallback if absent
-- `SERVICE_PORT` — backend port (default 3001)
-- `ALLOWED_ORIGIN` — CORS origin (default http://localhost:5173)
-
-## Running locally (no Docker)
-```bash
-cd backend && cp .env.sample .env && npm run dev   # port 3001
-cd frontend && npm run dev                          # port 5173
 ```
-No API key or MinIO needed — stub AI and local disk work out of the box.
-
-## Running with Docker
-```bash
-docker compose up --build
+pending → classified (AI succeeded)
+pending → classification_failed (AI errored)
+classified → completed (tailor claimed)
 ```
-Frontend: http://localhost:5173 | Backend: http://localhost:3001 | MinIO console: http://localhost:9001 (minioadmin/minioadmin)
+
+---
+
+## Running
+```bash
+# Local (no Docker)
+cd backend && cp .env.sample .env && npm run dev   # :3001, stub AI, local disk
+cd frontend && npm run dev                          # :5173
+
+# Tests
+cd backend && npm test              # all (30 tests)
+cd backend && npm run test:unit     # unit only
+cd backend && npm run test:integration
+
+# Docker
+docker compose up --build           # :5173 frontend, :3001 backend, :9001 MinIO console
+```
+
+---
 
 ## What is deliberately OUT of scope
-- Authentication (single-user internal tool)
-- WebSockets (polling at 5s is sufficient at 200/week volume)
-- Job queue / async processing
-- Frontend routing (single page)
-- Analytics UI (data model is prepared; UI is future work)
-- WCAG accessibility compliance
+- Auth, WebSockets, async job queue, analytics UI, WCAG compliance, multi-tenant, payments
+
+> For full detail on architecture, data model, and agent guidelines → see **AGENTS.md**

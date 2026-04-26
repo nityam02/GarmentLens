@@ -29,7 +29,7 @@ services:
         condition: service_healthy
     environment:
       SERVICE_PORT: 3001
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       UPLOAD_DIR: /tmp/garment-uploads
       ALLOWED_ORIGIN: http://localhost:5173
       MINIO_ENDPOINT: minio

@@ -13,9 +13,9 @@ const router = Router()
 
 router.post('/', upload.single('image'), uploadGarment)
 router.get('/', listGarments)
+router.get('/images/:filename', getImage)
 router.get('/:id', getGarment)
 router.patch('/:id/override', overrideClassification)
 router.patch('/:id/complete', completeGarment)
-router.get('/images/:filename', getImage)
 
 module.exports = router

@@ -1,19 +1,24 @@
+/**
+ * Multer upload middleware.
+ * File type and size constraints from config.
+ */
+
 const multer = require('multer')
 const path = require('path')
 const fs = require('fs')
+const config = require('../config')
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-const MAX_FILE_SIZE_BYTES = (parseInt(process.env.MAX_FILE_SIZE_MB) || 10) * 1024 * 1024
+const MAX_FILE_SIZE_BYTES = config.upload.maxFileSizeMb * 1024 * 1024
 
-const uploadDir = path.resolve(process.env.UPLOAD_DIR || './uploads')
+const uploadDir = path.resolve(config.upload.dir)
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase()
-    const safe = ext || '.jpg'
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${safe}`)
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg'
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`)
   },
 })
 
